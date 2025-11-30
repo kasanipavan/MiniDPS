@@ -14,6 +14,7 @@ builder.Services.AddServerSideBlazor().AddCircuitOptions(o => { if (builder.Envi
 
 // Configure database connection
 string connectionString = string.Empty;
+bool usePostgreSQL = false;
 try
 {
     var secretsService = new SecretsService();
@@ -31,6 +32,7 @@ try
             var port = secretsService.GetFieldFromSecret(secretJson, "port");
             var dbname = "postgres";
             connectionString = $"Host={host};Port={port};Database={dbname};Username={username};Password={password};SSL Mode=Require;Trust Server Certificate=true";
+            usePostgreSQL = true;
         }
         else throw new Exception("Secret was empty");
     }
@@ -46,6 +48,7 @@ try
             var port = secretsService.GetFieldFromSecret(secretJson, "port");
             var dbname = secretsService.GetFieldFromSecret(secretJson, "dbname");
             connectionString = $"Server={host},{port};Database={dbname};User Id={username};Password={password};TrustServerCertificate=true;Encrypt=true";
+            usePostgreSQL = false;
         }
         else throw new Exception("Failed to retrieve database credentials from Secrets Manager");
     }
@@ -55,9 +58,17 @@ catch (Exception ex)
     Console.WriteLine($"Warning: Could not load connection string from AWS Secrets Manager: {ex.Message}");
     Console.WriteLine("Falling back to appsettings.json connection string");
     connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? "Server=localhost;Database=DocumentProcessor;Integrated Security=true;TrustServerCertificate=True;";
+    usePostgreSQL = false;
 }
 
-builder.Services.AddDbContext<AppDbContext>(o => o.UseSqlServer(connectionString));
+if (usePostgreSQL)
+{
+    builder.Services.AddDbContext<AppDbContext>(o => o.UseNpgsql(connectionString));
+}
+else
+{
+    builder.Services.AddDbContext<AppDbContext>(o => o.UseSqlServer(connectionString));
+}
 builder.Services.AddScoped<DocumentRepository>();
 builder.Services.AddScoped<FileStorageService>();
 builder.Services.AddScoped<AIService>();
